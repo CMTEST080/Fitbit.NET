@@ -14,6 +14,8 @@ namespace Fitbit.Models
         [StringValue("/activities/floors")]
         Floors,
         [StringValue("/activities/elevation")]
-        Elevation
+        Elevation,
+        [StringValue("/activities/distance")]
+        Distance
     }
 }
