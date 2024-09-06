@@ -745,24 +745,38 @@ namespace Fitbit.Api.Portable
             }
         }
 
-        public async Task<IntradayData> GetIntraDayTimeSeriesAsync(IntradayResourceType timeSeriesResourceType, DateTime dayAndStartTime, TimeSpan intraDayTimeSpan)
+        public async Task<IntradayData> GetIntraDayTimeSeriesAsync(IntradayResourceType timeSeriesResourceType,
+            DateTime dayAndStartTime, TimeSpan intraDayTimeSpan, DataResolution resolution = DataResolution.OneMinute)
         {
+            switch (resolution)
+            {
+                case DataResolution.OneMinute:
+                case DataResolution.FiveMinute:
+                case DataResolution.FifteenMinute:
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException("This API endpoint only supports 1min, 5min, 15min resolutions. See https://dev.fitbit.com/build/reference/web-api/intraday/get-activity-intraday-by-interval/");
+            }
+
             string apiCall;
 
             if (intraDayTimeSpan > new TimeSpan(0, 1, 0) && //the timespan is greater than a minute
                 dayAndStartTime.Day == dayAndStartTime.Add(intraDayTimeSpan).Day) //adding the timespan doesn't go in to the next day
             {
-                apiCall = string.Format("/1/user/-{0}/date/{1}/1d/time/{2}/{3}.json",
+                apiCall = string.Format("/1/user/-{0}/date/{1}/1d/{2}/time/{3}/{4}.json",
                     timeSeriesResourceType.GetStringValue(),
                     dayAndStartTime.ToFitbitFormat(),
+                    resolution.GetStringValue(),
                     dayAndStartTime.ToString("HH:mm"),
                     dayAndStartTime.Add(intraDayTimeSpan).ToString("HH:mm"));
             }
             else //just get the today data, there was a date specified but the timerange was likely too large or negative
             {
-                apiCall = string.Format("/1/user/-{0}/date/{1}/1d.json",
+                apiCall = string.Format("/1/user/-{0}/date/{1}/1d/{2}.json",
                     timeSeriesResourceType.GetStringValue(),
-                    dayAndStartTime.ToFitbitFormat());
+                    dayAndStartTime.ToFitbitFormat(),
+                    resolution.GetStringValue());
             }
 
             apiCall = FitbitClientHelperExtensions.ToFullUrl(apiCall);
