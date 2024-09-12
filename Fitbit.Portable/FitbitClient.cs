@@ -429,17 +429,22 @@ namespace Fitbit.Api.Portable
         /// <returns></returns>
         public async Task<SleepData> GetSleepAsync(DateTime sleepDate)
         {
+            string responseBody = await GetSleepAsStringAsync(sleepDate);
+            var serializer = new JsonDotNetSerializer();
+            var data = serializer.Deserialize<SleepData>(responseBody);
+            FitbitClientExtensions.ProcessSleepData(data);
+            return data;
+        }
+
+        public async Task<string> GetSleepAsStringAsync(DateTime sleepDate)
+        {
             string apiCall = FitbitClientHelperExtensions.ToFullUrl("/1/user/{0}/sleep/date/{1}.json", args: sleepDate.ToFitbitFormat());
             using (HttpRequestMessage request = GetRequest(HttpMethod.Get, apiCall))
             {
                 using (HttpResponseMessage response = await HttpClient.SendAsync(request, CancellationToken))
                 {
                     await HandleResponse(response);
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var serializer = new JsonDotNetSerializer();
-                    var data = serializer.Deserialize<SleepData>(responseBody);
-                    FitbitClientExtensions.ProcessSleepData(data);
-                    return data;
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -476,21 +481,25 @@ namespace Fitbit.Api.Portable
         /// <returns></returns>
         public async Task<SleepDateRangeBase> GetSleepDateRangeAsync(DateTime startDate, DateTime endDate, string encodedUserId = null)
         {
+            string responseBody = await GetSleepDateRangeAsStringAsync(startDate, endDate, encodedUserId);
+            var serializer = new JsonDotNetSerializer();
+            var data = serializer.Deserialize<SleepDateRangeBase>(responseBody);
+
+            return data;
+        }
+
+        public async Task<string> GetSleepDateRangeAsStringAsync(DateTime startDate, DateTime endDate, string encodedUserId = null)
+        {
             var apiCall = FitbitClientHelperExtensions.ToFullUrl("/1.2/user/{0}/sleep/date/{1}/{2}.json", encodedUserId, startDate.ToFitbitFormat(), endDate.ToFitbitFormat());
             using (HttpRequestMessage request = GetRequest(HttpMethod.Get, apiCall))
             {
                 using (HttpResponseMessage response = await HttpClient.SendAsync(request, CancellationToken))
                 {
                     await HandleResponse(response);
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var serializer = new JsonDotNetSerializer();
-                    var data = serializer.Deserialize<SleepDateRangeBase>(responseBody);
-
-                    return data;
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
-
 
         /// <summary>
         /// The Get Sleep Logs List endpoint returns a list of a user's sleep logs (including naps) 
@@ -503,7 +512,7 @@ namespace Fitbit.Api.Portable
         /// <param name="encodedUserId"></param>
         /// <returns></returns>
         public async Task<SleepLogListBase> GetSleepLogListAsync(DateTime dateToList, SleepEnum decisionDate, SortEnum sort, int limit,
-            string encodedUserId = null)
+        string encodedUserId = null)
         {
             string setSleepDecision, setSort;
 
@@ -745,7 +754,7 @@ namespace Fitbit.Api.Portable
             }
         }
 
-        public async Task<IntradayData> GetIntraDayTimeSeriesAsync(IntradayResourceType timeSeriesResourceType,
+        private async Task<HttpResponseMessage> _GetIntraDayTimeSeriesAsync(IntradayResourceType timeSeriesResourceType,
             DateTime dayAndStartTime, TimeSpan intraDayTimeSpan, DataResolution resolution = DataResolution.OneMinute)
         {
             switch (resolution)
@@ -803,28 +812,7 @@ namespace Fitbit.Api.Portable
                         }
                     }
                     await HandleResponse(response);
-                    string responseBody = await response.Content.ReadAsStringAsync();
-
-                    if (string.IsNullOrWhiteSpace(responseBody))
-                    {
-                        throw new FitbitRequestException(response, null, "The Intraday data response body was null");
-                    }
-
-                    var serializer = new JsonDotNetSerializer { RootProperty = timeSeriesResourceType.ToTimeSeriesProperty() };
-
-                    IntradayData data = null;
-
-                    try
-                    {
-                        data = serializer.GetIntradayTimeSeriesData(responseBody);
-                    }
-                    catch (Exception ex)
-                    {
-                        FitbitRequestException fEx = new FitbitRequestException(response, null, "Serialization Error in GetIntradayTimeSeriesData", ex);
-                        throw fEx;
-                    }
-
-                    return data;
+                    return response;
                 }
                 finally
                 {
@@ -834,6 +822,43 @@ namespace Fitbit.Api.Portable
                     }
                 }
             }
+        }
+
+        public async Task<IntradayData> GetIntraDayTimeSeriesAsync(IntradayResourceType timeSeriesResourceType,
+        DateTime dayAndStartTime, TimeSpan intraDayTimeSpan, DataResolution resolution = DataResolution.OneMinute)
+        {
+            var response = await _GetIntraDayTimeSeriesAsync(timeSeriesResourceType, dayAndStartTime, intraDayTimeSpan, resolution);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            var serializer = new JsonDotNetSerializer { RootProperty = timeSeriesResourceType.ToTimeSeriesProperty() };
+
+            IntradayData data = null;
+
+            try
+            {
+                data = serializer.GetIntradayTimeSeriesData(responseBody);
+            }
+            catch (Exception ex)
+            {
+                FitbitRequestException fEx = new FitbitRequestException(response, null, "Serialization Error in GetIntradayTimeSeriesData", ex);
+                throw fEx;
+            }
+
+            return data;
+        }
+
+        public async Task<string> GetIntraDayTimeSeriesAsStringAsync(IntradayResourceType timeSeriesResourceType,
+        DateTime dayAndStartTime, TimeSpan intraDayTimeSpan, DataResolution resolution = DataResolution.OneMinute)
+        {
+            var response = await _GetIntraDayTimeSeriesAsync(timeSeriesResourceType, dayAndStartTime, intraDayTimeSpan, resolution);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            if (string.IsNullOrWhiteSpace(responseBody))
+            {
+                throw new FitbitRequestException(response, null, "The Intraday data response body was null");
+            }
+
+            return responseBody;
         }
 
         /// <summary>
@@ -976,6 +1001,13 @@ namespace Fitbit.Api.Portable
         /// <returns></returns>
         public async Task<Weight> GetWeightAsync(DateTime startDate, DateRangePeriod period)
         {
+            string responseBody = await GetWeightAsStringAsync(startDate, period);
+            var seralizer = new JsonDotNetSerializer();
+            return seralizer.GetWeight(responseBody);
+        }
+
+        public async Task<string> GetWeightAsStringAsync(DateTime startDate, DateRangePeriod period)
+        {
             switch (period)
             {
                 case DateRangePeriod.OneDay:
@@ -995,9 +1027,7 @@ namespace Fitbit.Api.Portable
                 using (HttpResponseMessage response = await HttpClient.SendAsync(request, CancellationToken))
                 {
                     await HandleResponse(response);
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer();
-                    return seralizer.GetWeight(responseBody);
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -1009,6 +1039,13 @@ namespace Fitbit.Api.Portable
         /// <param name="endDate"></param>
         /// <returns></returns>
         public async Task<Weight> GetWeightAsync(DateTime startDate, DateTime? endDate = null)
+        {
+            string responseBody = await GetWeightAsStringAsync(startDate, endDate);
+            var seralizer = new JsonDotNetSerializer();
+            return seralizer.GetWeight(responseBody);
+        }
+
+        public async Task<string> GetWeightAsStringAsync(DateTime startDate, DateTime? endDate = null)
         {
             string apiCall;
             if (endDate == null)
@@ -1030,9 +1067,7 @@ namespace Fitbit.Api.Portable
                 using (HttpResponseMessage response = await HttpClient.SendAsync(request, CancellationToken))
                 {
                     await HandleResponse(response);
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer();
-                    return seralizer.GetWeight(responseBody);
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -1352,6 +1387,16 @@ namespace Fitbit.Api.Portable
         /// <returns>ActivityLogsList</returns>
         public async Task<ActivityLogsList> GetActivityLogsListAsync(DateTime? beforeDate, DateTime? afterDate, int limit = 20, string encodedUserId = default(string))
         {
+            string responseBody = await GetActivityLogsListAsStringAsync(beforeDate, afterDate, limit, encodedUserId);
+            JsonSerializerSettings settings = new JsonSerializerSettings { DateParseHandling = DateParseHandling.DateTimeOffset };
+            JsonDotNetSerializer serializer = new JsonDotNetSerializer(settings);
+            ActivityLogsList result = serializer.Deserialize<ActivityLogsList>(responseBody);
+
+            return result;
+        }
+
+        public async Task<string> GetActivityLogsListAsStringAsync(DateTime? beforeDate, DateTime? afterDate, int limit = 20, string encodedUserId = default(string))
+        {
             //Check to make sure limit is gt 1 and less than 20
             limit = limit < 1 || limit > 20 ? 20 : limit;
 
@@ -1385,12 +1430,7 @@ namespace Fitbit.Api.Portable
                 {
                     await HandleResponse(response);
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    JsonSerializerSettings settings = new JsonSerializerSettings { DateParseHandling = DateParseHandling.DateTimeOffset };
-                    JsonDotNetSerializer serializer = new JsonDotNetSerializer(settings);
-                    ActivityLogsList result = serializer.Deserialize<ActivityLogsList>(responseBody);
-
-                    return result;
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -1411,6 +1451,11 @@ namespace Fitbit.Api.Portable
             };
 
             return result;
+        }
+
+        public async Task<string> GetActivityLogsListAsStringAsync(DateTime date, string encodedUserId = default(string))
+        {
+            return await GetActivityLogsListAsStringAsync(null, date, 20, encodedUserId);
         }
 
         #region HeartRateTimeSeries
@@ -1459,6 +1504,31 @@ namespace Fitbit.Api.Portable
             string url = "1/user/{0}/" + "activities/heart/date/" + date.ToString("yyyy-MM-dd") + "/" + dateRangePeriod.GetStringValue() + ".json";
             string apiCall = FitbitClientHelperExtensions.ToFullUrl(url, userId);
             return await ProcessHeartRateTimeSeries(apiCall);
+        }
+
+        public async Task<HeartActivitiesTimeSeries> GetHeartRateTimeSeriesV1(DateTime startDate, DateTime endDate, string userId = "-")
+        {
+            string responseBody = await GetHeartRateTimeSeriesAsStringV1(startDate, endDate, userId);
+            var seralizer = new JsonDotNetSerializer();
+            var fitbitResponse = seralizer.GetHeartActivitiesTimeSeries(responseBody);
+
+            return fitbitResponse;
+        }
+
+        public async Task<string> GetHeartRateTimeSeriesAsStringV1(DateTime startDate, DateTime endDate, string userId = "-")
+        {
+            string url = $"1/user/{userId}/activities/heart/date/{startDate.ToString("yyyy-MM-dd")}/{endDate.ToString("yyyy-MM-dd")}.json";
+            string apiCall = FitbitClientHelperExtensions.ToFullUrl(url, userId);
+
+            using (HttpRequestMessage request = GetRequest(HttpMethod.Get, apiCall))
+            {
+                using (HttpResponseMessage response = await HttpClient.SendAsync(request, CancellationToken))
+                {
+                    await HandleResponse(response);
+
+                    return await response.Content.ReadAsStringAsync();
+                }
+            }
         }
 
         #endregion
@@ -1586,6 +1656,22 @@ namespace Fitbit.Api.Portable
 
         public async Task<List<SpO2Intraday>> GetSpO2IntradayAsync(DateTime startDate, DateTime? endDate = null)
         {
+            string responseBody = await GetSpO2IntradayAsStringAsync(startDate, endDate);
+            var seralizer = new JsonDotNetSerializer();
+
+            if (endDate == null)
+            {
+                SpO2Intraday singleSpo2Intraday = seralizer.Deserialize<SpO2Intraday>(responseBody);
+                return new List<SpO2Intraday> { singleSpo2Intraday };
+            }
+            else
+            {
+                return seralizer.Deserialize<List<SpO2Intraday>>(responseBody);
+            }
+        }
+
+        public async Task<string> GetSpO2IntradayAsStringAsync(DateTime startDate, DateTime? endDate = null)
+        {
             string apiCall;
             if (endDate == null)
             {
@@ -1602,18 +1688,7 @@ namespace Fitbit.Api.Portable
                 {
                     await HandleResponse(response);
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer();
-
-                    if (endDate == null)
-                    {
-                        SpO2Intraday singleSpo2Intraday = seralizer.Deserialize<SpO2Intraday>(responseBody);
-                        return new List<SpO2Intraday> { singleSpo2Intraday };
-                    }
-                    else
-                    {
-                        return seralizer.Deserialize<List<SpO2Intraday>>(responseBody);
-                    }
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -1624,6 +1699,13 @@ namespace Fitbit.Api.Portable
         #region HRV
 
         public async Task<List<HrvSummaryLog>> GetHRVSummaryAsync(DateTime startDate, DateTime? endDate = null)
+        {
+            string responseBody = await GetHRVSummaryAsStringAsync(startDate, endDate);
+            var seralizer = new JsonDotNetSerializer { RootProperty = "hrv" };
+            return seralizer.Deserialize<List<HrvSummaryLog>>(responseBody);
+        }
+
+        public async Task<string> GetHRVSummaryAsStringAsync(DateTime startDate, DateTime? endDate = null)
         {
             string apiCall;
             if (endDate == null)
@@ -1641,14 +1723,19 @@ namespace Fitbit.Api.Portable
                 {
                     await HandleResponse(response);
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer { RootProperty = "hrv" };
-                    return seralizer.Deserialize<List<HrvSummaryLog>>(responseBody);
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
 
         public async Task<List<HrvIntraday>> GetHRVIntradayAsync(DateTime startDate, DateTime? endDate = null)
+        {
+            string responseBody = await GetHRVIntradayAsStringAsync(startDate, endDate);
+            var seralizer = new JsonDotNetSerializer { RootProperty = "hrv" };
+            return seralizer.Deserialize<List<HrvIntraday>>(responseBody);
+        }
+
+        public async Task<string> GetHRVIntradayAsStringAsync(DateTime startDate, DateTime? endDate = null)
         {
             string apiCall;
             if (endDate == null)
@@ -1666,9 +1753,7 @@ namespace Fitbit.Api.Portable
                 {
                     await HandleResponse(response);
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer { RootProperty = "hrv" };
-                    return seralizer.Deserialize<List<HrvIntraday>>(responseBody);
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -1706,6 +1791,13 @@ namespace Fitbit.Api.Portable
 
         public async Task<List<TemperatureSkin>> GetSkinTemperatureSummaryAsync(DateTime startDate, DateTime? endDate = null)
         {
+            string responseBody = await GetSkinTemperatureSummaryAsStringAsync(startDate, endDate);
+            var seralizer = new JsonDotNetSerializer { RootProperty = "tempSkin" };
+            return seralizer.Deserialize<List<TemperatureSkin>>(responseBody);
+        }
+
+        public async Task<string> GetSkinTemperatureSummaryAsStringAsync(DateTime startDate, DateTime? endDate = null)
+        {
             string apiCall;
             if (endDate == null)
             {
@@ -1722,9 +1814,7 @@ namespace Fitbit.Api.Portable
                 {
                     await HandleResponse(response);
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer { RootProperty = "tempSkin" };
-                    return seralizer.Deserialize<List<TemperatureSkin>>(responseBody);
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -1759,6 +1849,13 @@ namespace Fitbit.Api.Portable
 
         public async Task<List<BreathingRateIntraday>> GetBreathingRateIntradayAsync(DateTime startDate, DateTime? endDate = null)
         {
+            string responseBody = await GetBreathingRateIntradayAsStringAsync(startDate, endDate);
+            var seralizer = new JsonDotNetSerializer { RootProperty = "br" };
+            return seralizer.Deserialize<List<BreathingRateIntraday>>(responseBody);
+        }
+
+        public async Task<string> GetBreathingRateIntradayAsStringAsync(DateTime startDate, DateTime? endDate = null)
+        {
             string apiCall;
             if (endDate == null)
             {
@@ -1775,9 +1872,7 @@ namespace Fitbit.Api.Portable
                 {
                     await HandleResponse(response);
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer { RootProperty = "br" };
-                    return seralizer.Deserialize<List<BreathingRateIntraday>>(responseBody);
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -1813,6 +1908,13 @@ namespace Fitbit.Api.Portable
 
         public async Task<List<ActiveZoneMinutesIntraday>> GetActiveZoneMinutesIntradayAsync(DateTime startDate, DateTime? endDate = null, DataResolution resolution = DataResolution.OneMinute)
         {
+            string responseBody = await GetActiveZoneMinutesIntradayAsStringAsync(startDate, endDate, resolution);
+            var seralizer = new JsonDotNetSerializer { RootProperty = "activities-active-zone-minutes-intraday" };
+            return seralizer.Deserialize<List<ActiveZoneMinutesIntraday>>(responseBody);
+        }
+
+        public async Task<string> GetActiveZoneMinutesIntradayAsStringAsync(DateTime startDate, DateTime? endDate = null, DataResolution resolution = DataResolution.OneMinute)
+        {
             switch (resolution)
             {
                 case DataResolution.OneMinute:
@@ -1840,9 +1942,7 @@ namespace Fitbit.Api.Portable
                 {
                     await HandleResponse(response);
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer { RootProperty = "activities-active-zone-minutes-intraday" };
-                    return seralizer.Deserialize<List<ActiveZoneMinutesIntraday>>(responseBody);
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
@@ -1851,6 +1951,13 @@ namespace Fitbit.Api.Portable
 
         #region Cardio Fitness Score
         public async Task<List<CardioScoreSummary>> GetCardioScoreSummaryAsync(DateTime startDate, DateTime? endDate = null)
+        {
+            string responseBody = await GetCardioScoreSummaryAsStringAsync(startDate, endDate);
+            var seralizer = new JsonDotNetSerializer { RootProperty = "cardioScore" };
+            return seralizer.Deserialize<List<CardioScoreSummary>>(responseBody);
+        }
+
+        public async Task<string> GetCardioScoreSummaryAsStringAsync(DateTime startDate, DateTime? endDate = null)
         {
             string apiCall;
             if (endDate == null)
@@ -1868,9 +1975,7 @@ namespace Fitbit.Api.Portable
                 {
                     await HandleResponse(response);
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var seralizer = new JsonDotNetSerializer { RootProperty = "cardioScore" };
-                    return seralizer.Deserialize<List<CardioScoreSummary>>(responseBody);
+                    return await response.Content.ReadAsStringAsync();
                 }
             }
         }
