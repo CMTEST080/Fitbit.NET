@@ -795,40 +795,42 @@ namespace Fitbit.Api.Portable
                 HttpResponseMessage response = null;
                 try
                 {
-                    try
-                    {
-                        response = await HttpClient.SendAsync(request, CancellationToken);
-                    }
-                    catch (FitbitRequestException fre)
-                    {
-                        if (fre.ApiErrors.Any(err => err.Message == Constants.FloorsUnsupportedOnDeviceError))
-                        {
-                            return null;
-                        }
-                        else
-                        {
-                            //otherwise, rethrow because we only want to alter behavior for the very specific case above
-                            throw;
-                        }
-                    }
-                    await HandleResponse(response);
-                    return response;
+                    response = await HttpClient.SendAsync(request, CancellationToken);
                 }
-                finally
+                catch (FitbitRequestException fre)
                 {
-                    if (response != null)
+                    if (fre.ApiErrors.Any(err => err.Message == Constants.FloorsUnsupportedOnDeviceError))
                     {
-                        response.Dispose();
+                        return null;
+                    }
+                    else
+                    {
+                        //otherwise, rethrow because we only want to alter behavior for the very specific case above
+                        throw;
                     }
                 }
+                await HandleResponse(response);
+                return response;
             }
         }
 
         public async Task<IntradayData> GetIntraDayTimeSeriesAsync(IntradayResourceType timeSeriesResourceType,
         DateTime dayAndStartTime, TimeSpan intraDayTimeSpan, DataResolution resolution = DataResolution.OneMinute)
         {
-            var response = await _GetIntraDayTimeSeriesAsync(timeSeriesResourceType, dayAndStartTime, intraDayTimeSpan, resolution);
-            var responseBody = await response.Content.ReadAsStringAsync();
+            HttpResponseMessage response = null;
+            string responseBody = null;
+            try
+            {
+                response = await _GetIntraDayTimeSeriesAsync(timeSeriesResourceType, dayAndStartTime, intraDayTimeSpan, resolution);
+                responseBody = await response.Content.ReadAsStringAsync();
+            }
+            finally
+            {
+                if (response != null)
+                {
+                    response.Dispose();
+                }
+            }
 
             var serializer = new JsonDotNetSerializer { RootProperty = timeSeriesResourceType.ToTimeSeriesProperty() };
 
@@ -850,8 +852,20 @@ namespace Fitbit.Api.Portable
         public async Task<string> GetIntraDayTimeSeriesAsStringAsync(IntradayResourceType timeSeriesResourceType,
         DateTime dayAndStartTime, TimeSpan intraDayTimeSpan, DataResolution resolution = DataResolution.OneMinute)
         {
-            var response = await _GetIntraDayTimeSeriesAsync(timeSeriesResourceType, dayAndStartTime, intraDayTimeSpan, resolution);
-            var responseBody = await response.Content.ReadAsStringAsync();
+            HttpResponseMessage response = null;
+            string responseBody = null;
+            try
+            {
+                response = await _GetIntraDayTimeSeriesAsync(timeSeriesResourceType, dayAndStartTime, intraDayTimeSpan, resolution);
+                responseBody = await response.Content.ReadAsStringAsync();
+            }
+            finally
+            {
+                if (response != null)
+                {
+                    response.Dispose();
+                }
+            }
 
             if (string.IsNullOrWhiteSpace(responseBody))
             {
@@ -1397,8 +1411,8 @@ namespace Fitbit.Api.Portable
 
         public async Task<string> GetActivityLogsListAsStringAsync(DateTime? beforeDate, DateTime? afterDate, int limit = 20, string encodedUserId = default(string))
         {
-            //Check to make sure limit is gt 1 and less than 20
-            limit = limit < 1 || limit > 20 ? 20 : limit;
+            //Check to make sure limit is gt 1 and less than 100
+            limit = limit < 1 || limit > 100 ? 100 : limit;
 
             const int offset = 0;
             var sort = string.Empty;
