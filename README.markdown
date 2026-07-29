@@ -1,8 +1,9 @@
 # Fitbit.NET API Client Library
 
-## IMPORTANT: We're moving in the direction of a breaking change v2 of Fitbit.NET
-See more information about this. If you're starting a new projet, you should take a closer look at using the new, almost complete library: 
-https://github.com/aarondcoleman/Fitbit.NET/wiki/PREPARING-FOR-BREAKING-CHANGES---v2-Fitbit.NET-API-Library-In-Development
+## IMPORTANT: Fitbit.NET is soon to be OBSOLETE 
+
+7/29/2026 - In September 2026, Google will be deprecating the legacy Fitbit API and transitioning to the new Google Health API https://developers.google.com/health/get-started. With this release, Google is providing .NET and other language libraries consuming gRPC. We suggest migrating to this new Google-maintained library. Thank you for your years of contributions to this project.
+
 
 ## V1 Info
 
